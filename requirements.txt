@@ -1,0 +1,9 @@
+matplotlib
+numpy<2.0.0
+Pillow
+pyyaml
+torch==2.6.0
+torchvision==0.21.0
+tqdm
+wandb
+xformers==0.0.29.post2

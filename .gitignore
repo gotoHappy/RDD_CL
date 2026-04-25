@@ -1,0 +1,27 @@
+# Datasets (do not commit; they are large or proprietary)
+mydata/
+mytestdata/
+
+# Training outputs (checkpoints, logs, eval results)
+outputs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+*.egg
+build/
+dist/
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Env
+.env
+.venv/
+venv/

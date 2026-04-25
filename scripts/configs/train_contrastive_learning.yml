@@ -1,0 +1,52 @@
+model:
+  name: "dino2 + contrast_learning"
+  dino-model: "dinov2_vits14"
+  layers: [5, 6, 7, 8, 9, 10]
+  proj-hidden-dim: 512
+  proj-out-dim: 256
+  target-shp-row: 504
+  target-shp-col: 504
+  freeze-dino: true
+  unfreeze-dino-last-n-layer: 0
+
+optimizer:
+  epochs: 100
+  warmup-epoch: 10
+  learn-rate: 0.0001
+  lr-scheduler: "cosine"
+  grad-scaler: true
+
+dataset:
+  root: "mydata"
+  batch-size: 4
+  num-workers: 4
+  figsize: [504, 504]
+
+contrastive-loss:
+  patch-clean-thresh: 0.05
+  patch-defect-thresh: 0.30
+  foreground-thresh: 0.50
+  margin: 0.5
+  lambda-nn: 1.0
+  lambda-clean: 1.0
+  lambda-defect: 2.0
+  layer-loss-weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+inference:
+  layer-weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  gaussian-kernel: 5
+  gaussian-sigma: 1.0
+
+wandb:
+  project: "Robust_Defect_Detection_CL"
+  name: "dino2_contrast_learning_mydata"
+  output-path: "outputs/dino2_contrast_learning_mydata"
+  save-checkpoint-freq: 10
+  mode: "disabled"
+
+environment:
+  dry: false
+  seed: 123
+  verbose: true
+  device: "cuda"
+  gpu-ids: [0]

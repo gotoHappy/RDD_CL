@@ -1,0 +1,72 @@
+# Training Program per Training_Program.md:
+#   - DINOv3 ViT-B/16 (frozen, loaded from /data2/baizeyu/dinov3)
+#   - Input 512×512 → patch grid 32×32 (patch size 16, 768-dim features)
+#   - Projector: Linear(768→384) → GELU → Linear(384→256) → L2-normalise (no LayerNorm)
+#   - Loss: InfoNCE with N2 positive + A1 hard-negative + in-batch cross-object negatives
+
+model:
+  name: "dino2 + contrast_learning"
+  dino-model: "dinov3_vitb16"       # DINOv3 ViT-B/16 — 768-dim features, patch grid 32×32
+  # Path to the downloaded DINOv3 checkpoint (LVD-1689M pretrain).
+  # Leave null to instantiate with random weights (smoke test only).
+  dino-weights-path: "/data2/baizeyu/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
+  layers: [5, 6, 7, 8, 9, 10, 11]               # last three transformer blocks
+  proj-hidden-dim: 384
+  proj-out-dim: 256
+  proj-use-layer-norm: false        # Training Program specifies no LayerNorm
+  target-shp-row: 512
+  target-shp-col: 512
+  freeze-dino: true
+  unfreeze-dino-last-n-layer: 0
+
+optimizer:
+  epochs: 100
+  warmup-epoch: 5
+  learn-rate: 0.001
+  weight-decay: 0.05
+  betas: [0.9, 0.999]
+  final-scale: 0.01                 # cosine decays down to 1% of the base LR
+  grad-scaler: false
+
+dataset:
+  m2ad-root: "/data2/baizeyu/M2AD"
+  json-path: "/data2/baizeyu/M2AD/jsons/meta_unsupervised.json"
+  mask-root: "/data2/baizeyu/M2AD_mask"
+  dtd-root: "/data2/baizeyu/dtd"
+  split: "train"
+  batch-size: 8                     # 8 objects per batch
+  num-workers: 4
+  figsize: [512, 512]
+  min-lights-per-view: 2
+  # Perlin mask params
+  perlin-octaves: [4, 6]
+  perlin-scale: [2.0, 6.0]
+  min-area-ratio: 0.05
+  max-area-ratio: 0.30
+
+# Patch thresholds for labelling (applied at feature-map resolution)
+contrastive-loss:
+  patch-clean-thresh: 0.05          # defect ratio < 0.05 → clean
+  patch-defect-thresh: 0.30         # defect ratio > 0.30 → defect
+  foreground-thresh: 0.50           # fg ratio ≥ 0.50 → foreground patch
+  temperature: 0.07                 # InfoNCE temperature τ
+  layer-loss-weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+inference:
+  layer-weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  gaussian-kernel: 5
+  gaussian-sigma: 1.0
+
+wandb:
+  project: "Robust_Defect_Detection_CL"
+  name: "dino3_vitb16_m2ad_infonce"
+  output-path: "outputs/dino3_vitb16_m2ad_infonce"
+  save-checkpoint-freq: 10
+  mode: "disabled"
+
+environment:
+  dry: false
+  seed: 123
+  verbose: true
+  device: "cuda"
+  gpu-ids: [0]

@@ -1,0 +1,62 @@
+# mydata-only training:
+#   - DINOv3 ViT-B/16 frozen, 512x512 input, patch grid 32x32
+#   - real anomaly images and GT defect masks from mydata
+#   - pair-margin loss, no M2AD and no pseudo anomaly synthesis
+
+model:
+  name: "dino2 + contrast_learning"
+  dino-model: "dinov3_vitb16"
+  dino-weights-path: "/data2/baizeyu/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
+  layers: [5, 6, 7, 8, 9, 10, 11]
+  proj-hidden-dim: 384
+  proj-out-dim: 256
+  proj-use-layer-norm: false
+  target-shp-row: 512
+  target-shp-col: 512
+  freeze-dino: true
+  unfreeze-dino-last-n-layer: 0
+
+optimizer:
+  epochs: 1000
+  warmup-epoch: 5
+  learn-rate: 0.001
+  weight-decay: 0.05
+  betas: [0.9, 0.999]
+  final-scale: 0.01
+  grad-scaler: false
+
+dataset:
+  root: "mydata"
+  batch-size: 8
+  num-workers: 4
+  figsize: [512, 512]
+  spatial-scale: [0.8, 1.0]
+
+margin-loss:
+  margin-triplet: 0.30
+  margin-positive: 0.95
+  clean-weight: 1.0
+  defect-weight: 3.0
+  patch-clean-thresh: 0.05
+  patch-defect-thresh: 0.30
+  foreground-thresh: 0.50
+  layer-loss-weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+
+inference:
+  layer-weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  gaussian-kernel: 5
+  gaussian-sigma: 1.0
+
+wandb:
+  project: "Robust_Defect_Detection_CL"
+  name: "dino3_vitb16_mydata_margin"
+  output-path: "outputs/dino3_vitb16_mydata_margin_500_moredata"
+  save-checkpoint-freq: 100
+  mode: "disabled"
+
+environment:
+  dry: false
+  seed: 123
+  verbose: true
+  device: "cuda"
+  gpu-ids: [0]
