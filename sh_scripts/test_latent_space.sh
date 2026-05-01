@@ -1,0 +1,3 @@
+
+python scripts/evaluate_latent_space.py outputs/dino3_vitb16_mydata_margin_1000_moremore/last.pth \
+  --output outputs/dino3_vitb16_mydata_margin_1000_moremore/latent_space_metrics

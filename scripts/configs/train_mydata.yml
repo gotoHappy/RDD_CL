@@ -50,7 +50,7 @@ inference:
 wandb:
   project: "Robust_Defect_Detection_CL"
   name: "dino3_vitb16_mydata_margin"
-  output-path: "outputs/dino3_vitb16_mydata_margin_500_moredata"
+  output-path: "outputs/dino3_vitb16_mydata_margin_moremore"
   save-checkpoint-freq: 100
   mode: "disabled"
 

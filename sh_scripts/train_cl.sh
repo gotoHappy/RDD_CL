@@ -1,0 +1,1 @@
+python scripts/train_mydata.py scripts/configs/train_mydata.yml

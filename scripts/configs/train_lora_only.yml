@@ -9,7 +9,7 @@ model:
   name: "dino2 + contrast_learning"
   dino-model: "dinov3_vitb16"
   dino-weights-path: "/data2/baizeyu/dinov3/dinov3_vitb16_pretrain_lvd1689m-73cec8be.pth"
-  layers: [5, 6, 7, 8, 9, 10, 11]
+  layers: [9, 10, 11]
   projector-type: "identity"            # no projection — only LoRA-tuned backbone
   proj-out-dim: 256                     # ignored when projector-type=identity
   target-shp-row: 512
@@ -19,7 +19,7 @@ model:
   lora:
     rank: 16                            # default rank
     alpha: null                         # null → 2 * rank, so scaling=2.0
-    blocks: [5, 6, 7, 8, 9, 10, 11]     # which transformer blocks to inject
+    blocks: [9, 10, 11]     # which transformer blocks to inject
 
 optimizer:
   epochs: 500
@@ -45,17 +45,17 @@ margin-loss:
   patch-clean-thresh: 0.05
   patch-defect-thresh: 0.30
   foreground-thresh: 0.50
-  layer-loss-weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  layer-loss-weights: [1.0, 1.0, 1.0]
 
 inference:
-  layer-weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  layer-weights: [1.0, 1.0, 1.0]
   gaussian-kernel: 5
   gaussian-sigma: 1.0
 
 wandb:
   project: "Robust_Defect_Detection_CL"
   name: "dino3_vitb16_lora_only_r16"
-  output-path: "outputs/dino3_vitb16_lora_only_r16"
+  output-path: "outputs/dino3_vitb16_lora_only_r16_91011"
   save-checkpoint-freq: 100
   mode: "disabled"
 

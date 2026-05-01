@@ -1,6 +1,7 @@
 # Datasets (do not commit; they are large or proprietary)
 mydata/
 mytestdata/
+testdata/
 
 # Training outputs (checkpoints, logs, eval results)
 outputs/
