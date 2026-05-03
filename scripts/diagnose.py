@@ -168,28 +168,6 @@ def _apply_zscore_to_layer_maps(layer_maps, selected_layers, zscore_stats, stats
     return out
 
 
-def compute_score_map_crossattn(model, ref_img, query_img, target_shp, smooth_cfg):
-    """Score map for the cross-attention model: forward → sigmoid → smooth.
-
-    The cross-attention model already outputs full-resolution per-pixel
-    logits; we just apply sigmoid to get a probability and optional Gaussian
-    blur for visual smoothing. No cosine-distance / gamma suppression is
-    applied — the model itself learned the mask shape end-to-end.
-    """
-    logits = model(ref_img, query_img)              # (B, H, W) at target_shp
-    if logits.shape[-2:] != tuple(target_shp):
-        logits = F.interpolate(
-            logits.unsqueeze(1), size=target_shp,
-            mode="bilinear", align_corners=False,
-        ).squeeze(1)
-    fused = torch.sigmoid(logits)                   # (B, H, W) ∈ [0, 1]
-    k = smooth_cfg.get("gaussian-kernel", 5)
-    if k and k > 1:
-        sig = smooth_cfg.get("gaussian-sigma", 1.0)
-        fused = tvff.gaussian_blur(fused.unsqueeze(1), [k, k], [sig, sig]).squeeze(1)
-    return fused.squeeze(0).detach().cpu().numpy()  # (H, W)
-
-
 # ---------------------------------------------------------------------------
 # Training curve
 # ---------------------------------------------------------------------------
@@ -329,8 +307,8 @@ def _get_defect_thresh(checkpoint_args, fallback=0.3):
     """Look up ``patch-defect-thresh`` from the saved training config.
 
     Different training entry points store loss params under different keys:
-      - ``train_mydata``, ``train_m2ad_pair_mydata``, ``train_lora_*``: ``margin-loss``
-      - ``train_m2ad`` (InfoNCE):                                         ``contrastive-loss``
+      - ``train_mydata``, ``train_m2ad_pair_mydata``: ``margin-loss``
+      - ``train_m2ad`` (InfoNCE):                     ``contrastive-loss``
 
     Returns the first match (margin-loss preferred), else ``fallback``.
     """
@@ -579,7 +557,6 @@ def evaluate_testdata(
     device,
     out_dir,
     defect_thresh=0.3,
-    model_kind="contrast",  # "contrast" or "crossattn"
     trained_layers=None,
     use_layers=None,
     layer_aggregation="mean",
@@ -649,28 +626,16 @@ def evaluate_testdata(
             gt_h, gt_w = gt_bin.shape
 
             with torch.no_grad():
-                # Trained model:
-                #   - "contrast"  → cosine-distance pipeline on (ref, query) features
-                #   - "crossattn" → forward → sigmoid → smooth
-                if model_kind == "crossattn":
-                    sc_c_full = compute_score_map_crossattn(
-                        contrastive_encode, ref_t, qry_t, target_shp,
-                        {"gaussian-kernel": smooth_kernel, "gaussian-sigma": smooth_sigma},
-                    )
-                else:
-                    sc_c_full = compute_score_map(
-                        contrastive_encode, ref_t, qry_t, target_shp, trained_layers,
-                        {"gaussian-kernel": smooth_kernel, "gaussian-sigma": smooth_sigma},
-                        defect_thresh=defect_thresh,
-                        use_layers=use_layers,
-                        aggregation=layer_aggregation,
-                        top_k=top_k,
-                        zscore_stats=zscore_stats,
-                        stats_key="trained",
-                    )
-                # Baseline is always the raw DINOv3 cosine pipeline — that's
-                # what defines "untrained" comparison regardless of which
-                # head was trained on top.
+                sc_c_full = compute_score_map(
+                    contrastive_encode, ref_t, qry_t, target_shp, trained_layers,
+                    {"gaussian-kernel": smooth_kernel, "gaussian-sigma": smooth_sigma},
+                    defect_thresh=defect_thresh,
+                    use_layers=use_layers,
+                    aggregation=layer_aggregation,
+                    top_k=top_k,
+                    zscore_stats=zscore_stats,
+                    stats_key="trained",
+                )
                 sc_b_full = compute_score_map(
                     baseline_encode, ref_t, qry_t, target_shp, trained_layers,
                     {"gaussian-kernel": smooth_kernel, "gaussian-sigma": smooth_sigma},
@@ -953,20 +918,11 @@ def main():
     trained_model.eval()
 
     model_name = checkpoint_data["args"]["model"].get("name", "")
-    if model_name == "dino2 + cross_attention":
-        model_kind = "crossattn"
-    else:
-        model_kind = "contrast"
-    print(f"[diagnose] checkpoint model.name = {model_name!r}  →  model_kind={model_kind}")
+    print(f"[diagnose] checkpoint model.name = {model_name!r}")
 
-    # ---- Build baseline (raw DINOv3, no trained weights) ----
-    # For "contrast" checkpoints: baseline_args == checkpoint args
-    # For "crossattn" checkpoints: baseline_args == backbone-args nested in checkpoint
-    if model_kind == "crossattn":
-        baseline_args = checkpoint_data["args"]["model"]["backbone-args"]
-    else:
-        baseline_args = checkpoint_data["args"]["model"]
-    print("[diagnose] Building baseline model (raw DINOv3, LoRA B=0 ⇔ untrained) …")
+    # ---- Build baseline (raw DINOv3, no trained projector weights) ----
+    baseline_args = checkpoint_data["args"]["model"]
+    print("[diagnose] Building baseline model (raw DINOv3, untrained projector) …")
     baseline_model = models.get_model(**baseline_args)
     baseline_model = models.wrap_model_for_gpus(baseline_model, device=device)
     baseline_model.eval()
@@ -977,19 +933,10 @@ def main():
         int(checkpoint_data["args"]["model"]["target-shp-row"]),
         int(checkpoint_data["args"]["model"]["target-shp-col"]),
     )
-    # defect_thresh feeds the cosine-distance branch (used by baseline always,
-    # and by trained model only when model_kind == "contrast"). Look it up
-    # from the appropriate config block.
-    args_for_thresh = (
-        checkpoint_data["args"]["model"]["backbone-args"]
-        if model_kind == "crossattn"
-        else checkpoint_data["args"]
-    )
-    defect_thresh = _get_defect_thresh(args_for_thresh, fallback=0.3)
+    defect_thresh = _get_defect_thresh(checkpoint_data["args"], fallback=0.3)
     print(f"[diagnose] defect_thresh from checkpoint config: {defect_thresh}")
 
-    layer_args = baseline_args
-    trained_layers = [int(layer) for layer in layer_args["layers"]]
+    trained_layers = [int(layer) for layer in baseline_args["layers"]]
     use_layers, layer_aggregation = _resolve_use_layers(args.use_layers, trained_layers)
     print(f"[diagnose] trained layers: {trained_layers}")
     print(f"[diagnose] using layers  : {use_layers}")
@@ -1004,19 +951,11 @@ def main():
     plot_training_curves(logs_dir, str(out_dir / "training_curves.png"))
 
     # ---- Inference encode functions ----
-    # Trained branch:
-    #   contrast  → callable(ref, query) → (ref_feats_per_layer, query_feats_per_layer)
-    #   crossattn → callable(ref, query) → (B, H, W) logits (forward of the model itself)
-    if model_kind == "crossattn":
-        if isinstance(trained_model, torch.nn.DataParallel):
-            c_encode = trained_model.module
-        else:
-            c_encode = trained_model
+    # callable(ref, query) → (ref_feats_per_layer, query_feats_per_layer)
+    if isinstance(trained_model, torch.nn.DataParallel):
+        c_encode = trained_model.module.encode_pair
     else:
-        if isinstance(trained_model, torch.nn.DataParallel):
-            c_encode = trained_model.module.encode_pair
-        else:
-            c_encode = trained_model.encode_pair
+        c_encode = trained_model.encode_pair
 
     # Baseline branch: always raw DINOv3 cosine distance
     if isinstance(baseline_model, torch.nn.DataParallel):
@@ -1026,8 +965,6 @@ def main():
 
     zscore_stats = None
     if args.z_score:
-        if model_kind != "contrast":
-            raise SystemExit("--Z-score is only supported for contrastive checkpoints.")
         dataset_root = utils.resolve_path(checkpoint_data["args"]["dataset"]["root"])
         zscore_cache = (
             Path(utils.resolve_path(args.zscore_cache))
@@ -1063,7 +1000,6 @@ def main():
         device=device,
         out_dir=out_dir,
         defect_thresh=defect_thresh,
-        model_kind=model_kind,
         trained_layers=trained_layers,
         use_layers=use_layers,
         layer_aggregation=layer_aggregation,

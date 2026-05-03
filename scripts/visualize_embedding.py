@@ -138,7 +138,7 @@ def collect_patch_features(
             with torch.no_grad():
                 # Contrastive (post-projector)
                 _, q_feats_c = contrastive_model.encode_pair(ref_t, qry_t)
-                # Baseline (raw DINOv3 features at the same layer; LoRA B=0 ⇒ no effect)
+                # Baseline (raw DINOv3 features at the same layer; untrained projector)
                 _, q_feats_b = baseline_model.backbone(ref_t, qry_t)
 
             feat_c = q_feats_c[layer_idx].squeeze(0)  # (C_c, h, w)
@@ -409,7 +409,7 @@ def main():
         args.checkpoint, device=device, verbose=False)
     contrastive_model.eval()
 
-    print("[viz] building baseline (LoRA B=0 ⇔ raw DINOv3) …")
+    print("[viz] building baseline (raw DINOv3, untrained projector) …")
     baseline_model = models.get_model(**ckpt_data["args"]["model"])
     baseline_model = models.wrap_model_for_gpus(baseline_model, device=device)
     baseline_model.eval()

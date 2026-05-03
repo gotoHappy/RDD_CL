@@ -18,9 +18,7 @@ was trained on. The integers must come from
 ``checkpoint["args"]["model"]["layers"]``. With no flag, all trained layers
 are visualised.
 
-Only ``dino2 + contrast_learning`` checkpoints are supported — the cross-
-attention model collapses per-layer features internally, so layer-by-layer
-analysis isn't meaningful for those.
+Only ``dino2 + contrast_learning`` checkpoints are supported.
 
 Usage
 -----
@@ -237,12 +235,10 @@ def main():
     if name != "dino2 + contrast_learning":
         raise SystemExit(
             f"diagnose_lbl only supports 'dino2 + contrast_learning' "
-            f"checkpoints (got {name!r}). For 'dino2 + cross_attention' "
-            f"checkpoints, layer-by-layer comparison is not meaningful "
-            f"because the model collapses per-layer features internally."
+            f"checkpoints (got {name!r})."
         )
 
-    print("[diagnose_lbl] building baseline (raw DINOv3, LoRA B=0 ⇔ untrained) …")
+    print("[diagnose_lbl] building baseline (raw DINOv3, untrained projector) …")
     baseline = models.get_model(**ckpt_data["args"]["model"])
     baseline = models.wrap_model_for_gpus(baseline, device=device)
     baseline.eval()
